@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swiss Train Station Selector</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .flag {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: wave 2s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            25% {
+                transform: rotate(-10deg);
+            }
+
+            75% {
+                transform: rotate(10deg);
+            }
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+            display: block;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+            display: block;
+        }
+
+        .status.info {
+            background: #bee3f8;
+            color: #2c5282;
+            display: block;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 30px;
+            font-size: 13px;
+            color: #718096;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #cbd5e0;
+        }
+
+        .status-dot.connected {
+            background: #48bb78;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .example-stations {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .example-stations strong {
+            color: #4a5568;
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="flag">🇨🇭</div>
+            <h1>Swiss Train Station</h1>
+            <p class="subtitle">Select and publish your station</p>
+        </div>
+
+        <form id="stationForm">
+            <div class="form-group">
+                <label for="station">Train Station</label>
+                <input type="text" id="station" placeholder="e.g., Zürich HB, Bern, Genève" required>
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">
+                Publish Station
+            </button>
+        </form>
+
+        <div id="status" class="status"></div>
+
+        <div class="connection-status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="connectionText">Connecting to shiftr.io...</span>
+        </div>
+
+        <div class="example-stations">
+            <strong>Popular Stations:</strong>
+            Zürich HB, Bern, Basel SBB, Genève, Lausanne, Luzern, Winterthur, St. Gallen, Lugano
+        </div>
+    </div>
+
+    <script>
+        // MQTT Configuration - Using public shiftr.io broker
+        const MQTT_HOST = 'public.cloud.shiftr.io';
+        const MQTT_PORT = 443;
+        const MQTT_USERNAME = 'public';
+        const MQTT_PASSWORD = 'public';
+        const MQTT_TOPIC = 'bbw/gipfeli/swiss/trainstation';
+
+        let client;
+        let isConnected = false;
+
+        // Initialize MQTT connection
+        function connectMQTT() {
+            const clientId = 'swiss_station_' + Math.random().toString(16).substr(2, 8);
+
+            client = mqtt.connect(`wss://${MQTT_HOST}:${MQTT_PORT}`, {
+                clientId: clientId,
+                username: MQTT_USERNAME,
+                password: MQTT_PASSWORD,
+                reconnectPeriod: 1000
+            });
+
+            client.on('connect', () => {
+                console.log('Connected to shiftr.io');
+                isConnected = true;
+                updateConnectionStatus(true);
+            });
+
+            client.on('error', (error) => {
+                console.error('MQTT Error:', error);
+                updateConnectionStatus(false);
+                showStatus('Connection error. Check your credentials.', 'error');
+            });
+
+            client.on('close', () => {
+                isConnected = false;
+                updateConnectionStatus(false);
+            });
+        }
+
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('connectionText');
+
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected to shiftr.io';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function publishStation(station) {
+            if (!isConnected) {
+                showStatus('Not connected to MQTT broker', 'error');
+                return;
+            }
+
+            const message = {
+                station: station,
+                timestamp: new Date().toISOString()
+            };
+
+            client.publish(MQTT_TOPIC, JSON.stringify(message), { qos: 1 }, (error) => {
+                if (error) {
+                    console.error('Publish error:', error);
+                    showStatus('Failed to publish station', 'error');
+                } else {
+                    console.log('Published:', message);
+                    showStatus(`Station "${station}" published successfully!`, 'success');
+                    document.getElementById('station').value = '';
+                }
+            });
+        }
+
+        // Form submission
+        document.getElementById('stationForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const station = document.getElementById('station').value.trim();
+
+            if (station) {
+                publishStation(station);
+            }
+        });
+
+        // Connect on page load
+        connectMQTT();
+    </script>
+</body>
+
+</html>
